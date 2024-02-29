@@ -1,0 +1,73 @@
+name: CI
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: '-C debuginfo=0'
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        toolchain: [stable, beta]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          rustup update --no-self-update ${{ matrix.toolchain }}
+          rustup default ${{ matrix.toolchain }}
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v0-rust-2'
+
+      - name: Run test suite
+        run: cargo test --workspace --no-default-features --features x11
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          rustup component add clippy rustfmt
+
+      - name: Check spelling
+        uses: crate-ci/typos@master
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Linting
+        run: cargo clippy --workspace --no-default-features --features x11 -- --deny warnings
+
+  build-macos-arm:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        toolchain: [stable, beta]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install target
+        run: |
+          rustup update --no-self-update ${{ matrix.toolchain }}
+          rustup default ${{ matrix.toolchain }}
+          rustup target add aarch64-apple-darwin
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --target=aarch64-apple-darwin --no-default-features --features x11
